@@ -71,7 +71,7 @@ RobotPathDisplay::RobotPathDisplay() :
 
   robot_path_topic_property_ =
     new rviz::RosTopicProperty( "Robot Path Topic", "display_robot_path",
-                                ros::message_traits::datatype<nav_msgs::Path<std::vector<geometry_msgs::PoseStamped>>>(),
+                                ros::message_traits::datatype<nav_msgs::Path>(),
                                 "The topic on which the nav_msgs::Path messages are received",
                                 this,
                                 SLOT( changedRobotPathTopic() ), this );
@@ -90,15 +90,15 @@ RobotPathDisplay::RobotPathDisplay() :
   robot_alpha_property_->setMin( 0.0 );
   robot_alpha_property_->setMax( 1.0 );
 
-  /*attached_body_color_property_ = new rviz::ColorProperty( "Attached Body Color", QColor(150, 50, 150), "The color for the attached bodies",
+  attached_body_color_property_ = new rviz::ColorProperty( "Attached Body Color", QColor(150, 50, 150), "The color for the attached bodies",
                                                            this,
                                                            SLOT( changedAttachedBodyColor() ), this );
 
-  enable_link_highlight_ = new rviz::BoolProperty("Show Highlights", true, "Specifies whether link highlighting is enabled",
-                                                  this, SLOT( changedEnableLinkHighlight() ), this);
+  /*enable_link_highlight_ = new rviz::BoolProperty("Show Highlights", true, "Specifies whether link highlighting is enabled",
+                                                  this, SLOT( changedEnableLinkHighlight() ), this);*/
   enable_visual_visible_ = new rviz::BoolProperty("Visual Enabled", true, "Whether to display the visual representation of the robot.",
                                                   this, SLOT( changedEnableVisualVisible() ), this);
-  enable_collision_visible_ = new rviz::BoolProperty("Collision Enabled", false, "Whether to display the collision representation of the robot.",
+  /*enable_collision_visible_ = new rviz::BoolProperty("Collision Enabled", false, "Whether to display the collision representation of the robot.",
                                                   this, SLOT( changedEnableCollisionVisible() ), this);
 
   show_all_links_ = new rviz::BoolProperty("Show All Links", true, "Toggle all links visibility on or off.",
@@ -136,39 +136,39 @@ void RobotPathDisplay::reset()
 
 void RobotPathDisplay::changedAllLinks()
 {
-  Property *links_prop = subProp("Links");
+  /*Property *links_prop = subProp("Links");
   QVariant value(show_all_links_->getBool());
 
   for (int i=0 ; i<links_prop->numChildren() ; ++i)
   {
     Property *link_prop = links_prop->childAt(i);
     link_prop->setValue(value);
-  }
+  }*/
 }
 
 void RobotPathDisplay::setHighlight(const std::string& link_name, const std_msgs::ColorRGBA& color)
 {
-  rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
+  /*rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
   if (link)
   {
     link->setColor(color.r, color.g, color.b);
     link->setRobotAlpha(color.a * robot_alpha_property_->getFloat());
-  }
+  }*/
 }
 
 void RobotPathDisplay::unsetHighlight(const std::string& link_name)
 {
-  rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
+  /*rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
   if (link)
   {
     link->unsetColor();
     link->setRobotAlpha(robot_alpha_property_->getFloat());
-  }
+  }*/
 }
 
 void RobotPathDisplay::changedEnableLinkHighlight()
 {
-  if (enable_link_highlight_->getBool())
+  /*if (enable_link_highlight_->getBool())
   {
     for (std::map<std::string, std_msgs::ColorRGBA>::iterator it = highlights_.begin() ;
          it != highlights_.end() ;
@@ -185,7 +185,7 @@ void RobotPathDisplay::changedEnableLinkHighlight()
     {
       unsetHighlight(it->first);
     }
-  }
+  }*/
 }
 
 void RobotPathDisplay::changedEnableVisualVisible()
@@ -195,7 +195,7 @@ void RobotPathDisplay::changedEnableVisualVisible()
 
 void RobotPathDisplay::changedEnableCollisionVisible()
 {
-  robot_->setCollisionVisible(enable_collision_visible_->getBool());
+  /*robot_->setCollisionVisible(enable_collision_visible_->getBool());*/
 }
 
 static bool operator!=(const std_msgs::ColorRGBA& a, const std_msgs::ColorRGBA& b)
@@ -311,7 +311,7 @@ void RobotPathDisplay::changedRobotPathTopic()
   loadRobotModel();
 }
 //
-void RobotPathDisplay::newRobotPathCallback(const nav_msgs::Path<std::vector<geometry_msgs::PoseStamped>>& path_poses)
+void RobotPathDisplay::newRobotPathCallback(const nav_msgs::Path &path_poses)
 {
   if (!kmodel_)
     return;
@@ -368,9 +368,9 @@ void RobotPathDisplay::loadRobotModel()
     robot_->load(*kmodel_->getURDF());
     kstate_.reset(new robot_state::RobotState(kmodel_));
     kstate_->setToDefaultValues();
-    bool oldState = root_link_name_property_->blockSignals(true);
+    /*bool oldState = root_link_name_property_->blockSignals(true);
     root_link_name_property_->setStdString(getRobotModel()->getRootLinkName());
-    root_link_name_property_->blockSignals(oldState);
+    root_link_name_property_->blockSignals(oldState);*/
     update_state_ = true;
     setStatus( rviz::StatusProperty::Ok, "RobotPath", "Planning Model Loaded Successfully" );
   }

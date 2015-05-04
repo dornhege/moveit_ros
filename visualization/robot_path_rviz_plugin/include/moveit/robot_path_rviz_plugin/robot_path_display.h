@@ -96,7 +96,7 @@ private Q_SLOTS:
   void changedRootLinkName();
   void changedRobotSceneAlpha();
   void changedAttachedBodyColor();
-  void changedRobotStateTopic();
+  void changedRobotPathTopic();
   void changedEnableLinkHighlight();
   void changedEnableVisualVisible();
   void changedEnableCollisionVisible();
@@ -114,7 +114,7 @@ protected:
   void setLinkColor(rviz::Robot* robot, const std::string& link_name, const QColor &color);
   void unsetLinkColor(rviz::Robot* robot, const std::string& link_name);
 
-  void newRobotStateCallback(const nav_msgs::Path<std::vector<geometry_msgs::PoseStamped>> path_poses);
+  void newRobotPathCallback(const nav_msgs::Path &path_poses);
 
   void setRobotHighlights(const moveit_msgs::DisplayRobotState::_highlight_links_type& highlight_links);
   void setHighlight(const std::string& link_name, const std_msgs::ColorRGBA& color);
@@ -140,10 +140,10 @@ protected:
   rviz::StringProperty* robot_description_property_;
   /*rviz::StringProperty* root_link_name_property_;*/
   rviz::RosTopicProperty* robot_path_topic_property_;
-  /*rviz::FloatProperty* robot_alpha_property_;
-  /*rviz::ColorProperty* attached_body_color_property_;*/
+  rviz::FloatProperty* robot_alpha_property_;
+  rviz::ColorProperty* attached_body_color_property_;
   /*rviz::BoolProperty* enable_link_highlight_;*/
-  /*rviz::BoolProperty* enable_visual_visible_;*/
+  rviz::BoolProperty* enable_visual_visible_;
   /*rviz::BoolProperty* enable_collision_visible_;*/
   /*rviz::BoolProperty* show_all_links_;*/
 };
