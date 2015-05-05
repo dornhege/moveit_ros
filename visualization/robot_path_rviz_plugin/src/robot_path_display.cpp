@@ -54,6 +54,9 @@
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
 
+#include <boost/foreach.hpp>
+#define forEach BOOST_FOREACH
+
 namespace moveit_rviz_plugin
 {
 
@@ -313,10 +316,52 @@ void RobotPathDisplay::changedRobotPathTopic()
 //
 void RobotPathDisplay::newRobotPathCallback(const nav_msgs::Path &path_poses)
 {
+    ROS_INFO("AKFHLKAJFKLFS\n");
   if (!kmodel_)
     return;
   if (!kstate_)
     kstate_.reset(new robot_state::RobotState(kmodel_));
+
+  // TODO get current state from PlanningScene and set our state from that.
+
+    std::vector<const moveit::core::JointModel*> sjm = kmodel_->getSingleDOFJointModels();
+  std::vector<const moveit::core::JointModel*> mjm = kmodel_->getMultiDOFJointModels();
+
+  ROS_INFO_STREAM("SSSS");
+  forEach(const moveit::core::JointModel* s, sjm) {
+        ROS_INFO_STREAM(s->getName());
+  }
+
+  ROS_INFO_STREAM("MMMM");
+  forEach(const moveit::core::JointModel* s, mjm) {
+        ROS_INFO_STREAM(s->getName());
+        const moveit::core::LinkModel* p = s->getParentLinkModel();
+        const moveit::core::LinkModel* c = s->getChildLinkModel();
+        std::string pn;
+        std::string cn;
+        if(p)
+            pn = p->getName();
+        else
+            pn = kmodel_->getModelFrame();
+        if(c)
+            cn = c->getName();
+        ROS_INFO_STREAM(pn << " -> " << cn);
+  }
+
+Eigen::Affine3d base_tf = kstate_->getGlobalLinkTransform("base_footprint");
+base_tf.translation().x() += 1.0;
+
+// SET ROBOT POSITION
+// eigen_conversions
+  kstate_->setJointPositions("world_joint",base_tf);
+
+//  Eigen::Affine3d fixed_tf = kstate_->getGlobalLinkTransform(fixed_frame_.toStdString());
+//  ROS_INFO_STREAM(std::string("base ") << base_tf.translation());
+//  ROS_INFO_STREAM(std::string("fixed ") << fixed_tf.translation());
+
+
+
+
   // possibly use TF to construct a robot_state::Transforms object to pass in to the conversion functio?
   
   // TODO: NEED POSE TO STATE!

@@ -130,6 +130,7 @@ protected:
   ros::NodeHandle root_nh_;
   ros::Subscriber robot_path_subscriber_;
 
+  std::vector<RobotStateVisualizationPtr> robots_;
   RobotStateVisualizationPtr robot_;
   rdf_loader::RDFLoaderPtr rdf_loader_;
   robot_model::RobotModelConstPtr kmodel_;
