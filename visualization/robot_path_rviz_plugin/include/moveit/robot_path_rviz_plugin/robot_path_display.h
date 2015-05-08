@@ -97,10 +97,10 @@ private Q_SLOTS:
   void changedRobotSceneAlpha();
   void changedAttachedBodyColor();
   void changedRobotPathTopic();
-  void changedEnableLinkHighlight();
+  /*void changedEnableLinkHighlight();
   void changedEnableVisualVisible();
   void changedEnableCollisionVisible();
-  void changedAllLinks();
+  void changedAllLinks();*/
 
 protected:
 
@@ -111,14 +111,14 @@ protected:
    */
   void calculateOffsetPosition();
 
-  void setLinkColor(rviz::Robot* robot, const std::string& link_name, const QColor &color);
-  void unsetLinkColor(rviz::Robot* robot, const std::string& link_name);
+  /*void setLinkColor(rviz::Robot* robot, const std::string& link_name, const QColor &color);
+  void unsetLinkColor(rviz::Robot* robot, const std::string& link_name);*/
 
   void newRobotPathCallback(const nav_msgs::Path &path_poses);
 
-  void setRobotHighlights(const moveit_msgs::DisplayRobotState::_highlight_links_type& highlight_links);
+  /*void *setRobotHighlights(const moveit_msgs::DisplayRobotState::_highlight_links_type& highlight_links);
   void setHighlight(const std::string& link_name, const std_msgs::ColorRGBA& color);
-  void unsetHighlight(const std::string& link_name);
+  void unsetHighlight(const std::string& link_name);*/
 
   // overrides from Display
   virtual void onInitialize();
@@ -130,21 +130,24 @@ protected:
   ros::NodeHandle root_nh_;
   ros::Subscriber robot_path_subscriber_;
 
-  std::vector<RobotStateVisualizationPtr> robots_;
-  RobotStateVisualizationPtr robot_;
   rdf_loader::RDFLoaderPtr rdf_loader_;
-  robot_model::RobotModelConstPtr kmodel_;
+  RobotStateVisualizationPtr robot_;
   robot_state::RobotStatePtr kstate_;
-  std::map<std::string, std_msgs::ColorRGBA> highlights_;
+  robot_model::RobotModelConstPtr kmodel_;
+  rviz::FloatProperty* robot_alpha_property_;
+  rviz::ColorProperty* attached_body_color_property_;
+  
+  RobotStateVisualizationPtr robot2_;
+  robot_state::RobotStatePtr kstate2_;
+  robot_model::RobotModelConstPtr kmodel2_;
+  /*std::map<std::string, std_msgs::ColorRGBA> highlights_;*/
   bool update_state_;
 
   rviz::StringProperty* robot_description_property_;
-  /*rviz::StringProperty* root_link_name_property_;*/
+  rviz::StringProperty* root_link_name_property_;
   rviz::RosTopicProperty* robot_path_topic_property_;
-  rviz::FloatProperty* robot_alpha_property_;
-  rviz::ColorProperty* attached_body_color_property_;
   /*rviz::BoolProperty* enable_link_highlight_;*/
-  rviz::BoolProperty* enable_visual_visible_;
+  /*rviz::BoolProperty* enable_visual_visible_;*/
   /*rviz::BoolProperty* enable_collision_visible_;*/
   /*rviz::BoolProperty* show_all_links_;*/
 };
