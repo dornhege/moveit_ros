@@ -180,8 +180,8 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
       rstate->update();
       rbot->update(rstate);
       rbot->setVisible(true);
-      //robot vbot = { rmodel, rstate, rbot, };
-      robots_.push_back(rbot);
+      robot vbot = { rmodel, rstate, rbot, };
+      robots_.push_back(vbot);
     }
     setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );  
   }

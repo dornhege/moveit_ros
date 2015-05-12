@@ -121,7 +121,7 @@ protected:
   ros::Subscriber robot_path_subscriber_;
 
   rdf_loader::RDFLoaderPtr rdf_loader_;
-  std::vector<RobotStateVisualizationPtr> robots_;
+  std::vector<robot> robots_;
   RobotStateVisualizationPtr robot_;
   robot_state::RobotStatePtr kstate_;
   robot_model::RobotModelConstPtr kmodel_;
