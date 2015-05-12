@@ -50,6 +50,8 @@
 #include <rviz/display_context.h>
 #include <rviz/frame_manager.h>
 #include <tf/transform_listener.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Pose.h>
 
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
@@ -79,12 +81,12 @@ RobotPathDisplay::RobotPathDisplay() :
                               this,
                               SLOT( changedRobotDescription() ), this );
     
-  root_link_name_property_ =
-    new rviz::StringProperty( "Robot Root Link", "", "Shows the name of the root link for the robot model",
-                              this,
-                              SLOT( changedRootLinkName() ), this );
-    
-  root_link_name_property_->setReadOnly(true);
+//   root_link_name_property_ =
+//     new rviz::StringProperty( "Robot Root Link", "", "Shows the name of the root link for the robot model",
+//                               this,
+//                               SLOT( changedRootLinkName() ), this );
+//     
+//   root_link_name_property_->setReadOnly(true);
   
   // Planning scene category -------------------------------------------------------------------------------------------
   robot_alpha_property_ =
@@ -146,63 +148,53 @@ static bool operator!=(const std_msgs::ColorRGBA& a, const std_msgs::ColorRGBA& 
          a.a != b.a;
 }
 
-void RobotPathDisplay::newRobotPathCallback(const nav_msgs::Path &path_poses)
+void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
 {
-  if (!kmodel_)
+  robots_.clear();
+  if(!path){
+    setStatus( rviz::StatusProperty::Error, "RobotPath", "Path is null" );
     return;
-  if (!kstate_)
-    kstate_.reset(new robot_state::RobotState(kmodel_));
-
-  
-  // TODO get current state from PlanningScene and set our state from that.
-  // possibly use TF to construct a robot_state::Transforms object to pass in to the conversion functio?  
-  // TODO: NEED POSE TO STATE!
-  /*robot_state::robotStateMsgToRobotState(state_msg->state, *kstate_);
-  setRobotHighlights(state_msg->highlight_links);*/
-  std::vector<const moveit::core::JointModel*> sjm = kmodel_->getSingleDOFJointModels();
-  std::vector<const moveit::core::JointModel*> mjm = kmodel_->getMultiDOFJointModels();
-  
-  ROS_INFO_STREAM("===SingleDOFJoints===");
-  forEach(const moveit::core::JointModel* s, sjm) {
-        ROS_INFO_STREAM(s->getName());
   }
-
-  ROS_INFO_STREAM("===MultiDOFJoints===");
-  forEach(const moveit::core::JointModel* s, mjm) {
-        ROS_INFO_STREAM(s->getName());
-        const moveit::core::LinkModel* p = s->getParentLinkModel();
-        const moveit::core::LinkModel* c = s->getChildLinkModel();
-        std::string pn;
-        std::string cn;
-        if(p)
-            pn = p->getName();
-        else
-            pn = kmodel_->getModelFrame();
-        if(c)
-            cn = c->getName();
-        ROS_INFO_STREAM(pn << " -> " << cn);
-  }
+  ROS_INFO_STREAM("Path length: " << path->poses.size());
   
-  std::string rootlinkname = kmodel_->getRootLinkName();
-  Eigen::Affine3d base_tf = kstate_->getGlobalLinkTransform(rootlinkname);
-  base_tf.translation().x() += 1.0;
-  
-  const moveit::core::JointModel* pjmodel = kmodel_->getLinkModel(rootlinkname)->getParentJointModel();
-  if(pjmodel){
-    kstate_->setJointPositions(pjmodel, base_tf);
+  if (!rdf_loader_)
+    rdf_loader_.reset(new rdf_loader::RDFLoader(robot_description_property_->getStdString()));
+  if (rdf_loader_->getURDF())
+  {
+    const boost::shared_ptr<srdf::Model> &srdf = rdf_loader_->getSRDF() ? rdf_loader_->getSRDF() : boost::shared_ptr<srdf::Model>(new srdf::Model());
+    const boost::shared_ptr<urdf::ModelInterface> &mdliface = rdf_loader_->getURDF();
+      robot_model::RobotModelPtr rmodel = robot_model::RobotModelPtr(new robot_model::RobotModel(mdliface, srdf));
     
-    ROS_INFO_STREAM("RootLinkName: " << rootlinkname);
-    ROS_INFO_STREAM("RootLinkParentJoint: " << pjmodel->getName());
+    forEach(const geometry_msgs::PoseStamped ps, path->poses){
+      robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(rmodel));
+      rstate->setToDefaultValues();
+      std::string rootlinkname = rmodel->getRootLinkName();
+      Eigen::Affine3d base_tf = rstate->getGlobalLinkTransform(rootlinkname);
+      base_tf.translation().x() += ps.pose.position.x;
+      base_tf.translation().y() += ps.pose.position.y;
+      base_tf.translation().z() += ps.pose.position.z;
+      
+      rstate->setJointPositions(rmodel->getRootJoint(), base_tf);
+      RobotStateVisualizationPtr rbot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
+      rbot->load(*rmodel->getURDF());
+      rstate->update();
+      rbot->update(rstate);
+      rbot->setVisible(true);
+      //robot vbot = { rmodel, rstate, rbot, };
+      robots_.push_back(rbot);
+    }
+    setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );  
   }
-  else {
-    ROS_INFO_STREAM("Can't find LinkModel");
-  } 
+  else
+    setStatus( rviz::StatusProperty::Error, "RobotPath", "Couldn't load Robot Model" );
   
-//   Eigen::Affine3d fixed_tf = kstate_->getGlobalLinkTransform(fixed_frame_.toStdString());
-//   ROS_INFO_STREAM(std::string("base ") << base_tf.translation());
-//   ROS_INFO_STREAM(std::string("fixed ") << fixed_tf.translation());
-
-//     kstate_->setJointPositions(lmodel, base_tf);
+  ROS_INFO_STREAM("robots_ length: " << robots_.size());
+//   TODO get current state from PlanningScene and set our state from that.
+//   possibly use TF to construct a robot_state::Transforms object to pass in to the conversion functio?
+  
+  
+//   base_tf.translation().x() += 1.0;
+  
   update_state_ = true;
 }
 
@@ -251,157 +243,8 @@ void RobotPathDisplay::changedRobotPathTopic()
 {
   robot_path_subscriber_.shutdown();
   robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
-  robot_->clear();
-  loadRobotModel();
+  robots_.clear();
 }
-
-/*void RobotPathDisplay::changedAllLinks()
-{
-  Property *links_prop = subProp("Links");
-  QVariant value(show_all_links_->getBool());
-
-  for (int i=0 ; i<links_prop->numChildren() ; ++i)
-  {
-    Property *link_prop = links_prop->childAt(i);
-    link_prop->setValue(value);
-  }
-}
-
-void RobotPathDisplay::unsetHighlight(const std::string& link_name)
-{
-  rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
-  if (link)
-  {
-    link->unsetColor();
-    link->setRobotAlpha(robot_alpha_property_->getFloat());
-  }
-}
-
-void RobotPathDisplay::changedEnableLinkHighlight()
-{
-  /*if (enable_link_highlight_->getBool())
-  {
-    for (std::map<std::string, std_msgs::ColorRGBA>::iterator it = highlights_.begin() ;
-         it != highlights_.end() ;
-         ++it)
-    {
-      setHighlight(it->first, it->second);
-    }
-  }
-  else
-  {
-    for (std::map<std::string, std_msgs::ColorRGBA>::iterator it = highlights_.begin() ;
-         it != highlights_.end() ;
-         ++it)
-    {
-      unsetHighlight(it->first);
-    }
-  }
-}
-
-void RobotPathDisplay::changedEnableVisualVisible()
-{
-  robot_->setVisualVisible(enable_visual_visible_->getBool());
-}
-
-void RobotPathDisplay::changedEnableCollisionVisible()
-{
-  robot_->setCollisionVisible(enable_collision_visible_->getBool());
-}*/
-
-/*void RobotPathDisplay::setHighlight(const std::string& link_name, const std_msgs::ColorRGBA& color)
-{
-  rviz::RobotLink *link = robot_->getRobot().getLink(link_name);
-  if (link)
-  {
-    link->setColor(color.r, color.g, color.b);
-    link->setRobotAlpha(color.a * robot_alpha_property_->getFloat());
-  }
-}
-
-void RobotPathDisplay::setRobotHighlights(const moveit_msgs::DisplayRobotState::_highlight_links_type& highlight_links)
-{
-  if (highlight_links.empty() && highlights_.empty())
-    return;
-
-  std::map<std::string, std_msgs::ColorRGBA> highlights;
-  for (moveit_msgs::DisplayRobotState::_highlight_links_type::const_iterator it = highlight_links.begin() ;
-       it != highlight_links.end() ;
-       ++it)
-  {
-    highlights[it->id] = it->color;
-  }
-
-  if (enable_link_highlight_->getBool())
-  {
-    std::map<std::string, std_msgs::ColorRGBA>::iterator ho = highlights_.begin();
-    std::map<std::string, std_msgs::ColorRGBA>::iterator hn = highlights.begin();
-    while (ho != highlights_.end() || hn != highlights.end())
-    {
-      if (ho == highlights_.end())
-      {
-        setHighlight(hn->first, hn->second);
-        ++hn;
-      }
-      else if (hn == highlights.end())
-      {
-        unsetHighlight(ho->first);
-        ++ho;
-      }
-      else if (hn->first < ho->first)
-      {
-        setHighlight(hn->first, hn->second);
-        ++hn;
-      }
-      else if (hn->first > ho->first)
-      {
-        unsetHighlight(ho->first);
-        ++ho;
-      }
-      else if (hn->second != ho->second)
-      {
-        setHighlight(hn->first, hn->second);
-        ++ho;
-        ++hn;
-      }
-      else
-      {
-        ++ho;
-        ++hn;
-      }
-    }
-  }
-
-  swap(highlights, highlights_);
-}
-
-void RobotPathDisplay::setLinkColor(const std::string& link_name, const QColor &color)
-{
-  setLinkColor(&robot_->getRobot(), link_name, color );
-}
-
-void RobotPathDisplay::unsetLinkColor(const std::string& link_name)
-{
-  unsetLinkColor(&robot_->getRobot(), link_name);
-}
-
-void RobotPathDisplay::setLinkColor(rviz::Robot* robot,  const std::string& link_name, const QColor &color )
-{
-  rviz::RobotLink *link = robot->getLink(link_name);
-
-  // Check if link exists
-  if (link)
-    link->setColor( color.redF(), color.greenF(), color.blueF() );
-}
-
-void RobotPathDisplay::unsetLinkColor(rviz::Robot* robot, const std::string& link_name )
-{
-  rviz::RobotLink *link = robot->getLink(link_name);
-
-  // Check if link exists
-  if (link)
-    link->unsetColor();
-}*/
 
 // ******************************************************************************************
 // Load
@@ -418,12 +261,12 @@ void RobotPathDisplay::loadRobotModel()
     robot_->load(*kmodel_->getURDF());
     kstate_.reset(new robot_state::RobotState(kmodel_));
     kstate_->setToDefaultValues();
-    bool oldState = root_link_name_property_->blockSignals(true);
-    std::string rootlinkname = getRobotModel()->getRootLinkName();
-    ROS_INFO_STREAM("Robotmodel: " << rootlinkname);
-    ROS_INFO_STREAM("Kmodel: " << kmodel_->getRootLinkName());
-    root_link_name_property_->setStdString(rootlinkname);
-    root_link_name_property_->blockSignals(oldState);
+//     std::string rootlinkname = kmodel_->getRootLinkName();
+//     ROS_INFO_STREAM("Robotmodel: " << rootlinkname);
+//     ROS_INFO_STREAM("Kmodel: " << kmodel_->getRootLinkName());
+//     bool oldState = root_link_name_property_->blockSignals(true);
+//     root_link_name_property_->setStdString(rootlinkname);
+//     root_link_name_property_->blockSignals(oldState);
     update_state_ = true;
     setStatus( rviz::StatusProperty::Ok, "RobotPath", "Planning Model Loaded Successfully" );
   }
@@ -439,8 +282,6 @@ void RobotPathDisplay::onEnable()
   loadRobotModel();
   if (robot_)
   {
-    /*changedEnableVisualVisible();
-    changedEnableCollisionVisible();*/
     robot_->setVisible(true);
   }
   calculateOffsetPosition();
@@ -472,17 +313,17 @@ void RobotPathDisplay::update(float wall_dt, float ros_dt)
 // ******************************************************************************************
 void RobotPathDisplay::calculateOffsetPosition()
 {
-  if (!getRobotModel())
+  if (!kmodel_)
     return;
 
   ros::Time stamp;
   std::string err_string;
-  if (context_->getTFClient()->getLatestCommonTime(fixed_frame_.toStdString(), getRobotModel()->getModelFrame(), stamp, &err_string) != tf::NO_ERROR)
+  if (context_->getTFClient()->getLatestCommonTime(fixed_frame_.toStdString(), kmodel_->getModelFrame(), stamp, &err_string) != tf::NO_ERROR)
     return;
 
-  tf::Stamped<tf::Pose> pose(tf::Pose::getIdentity(), stamp, getRobotModel()->getModelFrame());
+  tf::Stamped<tf::Pose> pose(tf::Pose::getIdentity(), stamp, kmodel_->getModelFrame());
 
-  if (context_->getTFClient()->canTransform(fixed_frame_.toStdString(), getRobotModel()->getModelFrame(), stamp))
+  if (context_->getTFClient()->canTransform(fixed_frame_.toStdString(), kmodel_->getModelFrame(), stamp))
   {
     try
     {
