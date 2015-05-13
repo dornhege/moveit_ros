@@ -65,11 +65,18 @@ class ColorProperty;
 namespace moveit_rviz_plugin
 {
 
-struct robot {
-  robot_model::RobotModelPtr model;
-  robot_state::RobotStatePtr state;
-  RobotStateVisualizationPtr robot;
+class RobotCnt {
+public:
+  RobotCnt(robot_model::RobotModelPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot);
+  ~RobotCnt();
+  
+  robot_model::RobotModelPtr model_;
+  robot_state::RobotStatePtr state_;
+  RobotStateVisualizationPtr robot_;
 };
+
+typedef boost::shared_ptr< ::moveit_rviz_plugin::RobotCnt > RobotCntPtr;
+typedef boost::shared_ptr< ::moveit_rviz_plugin::RobotCnt const > RobotCntConstPtr;
   
 class RobotPathVisualization;
 
@@ -85,16 +92,12 @@ public:
   virtual void update(float wall_dt, float ros_dt);
   virtual void reset();
 
-  void setLinkColor(const std::string &link_name, const QColor &color);
-  void unsetLinkColor(const std::string& link_name);
-
 private Q_SLOTS:
 
   // ******************************************************************************************
   // Slot Event Functions
   // ******************************************************************************************
   void changedRobotDescription();
-  void changedRootLinkName();
   void changedRobotSceneAlpha();
   void changedAttachedBodyColor();
   void changedRobotPathTopic();
@@ -121,17 +124,15 @@ protected:
   ros::Subscriber robot_path_subscriber_;
 
   rdf_loader::RDFLoaderPtr rdf_loader_;
-  std::vector<robot> robots_;
-  RobotStateVisualizationPtr robot_;
-  robot_state::RobotStatePtr kstate_;
+  std::vector<RobotCntConstPtr> robots_;
+  
   robot_model::RobotModelConstPtr kmodel_;
   rviz::FloatProperty* robot_alpha_property_;
   rviz::ColorProperty* attached_body_color_property_;
   bool update_state_;
 
-  rviz::StringProperty* robot_description_property_;
-  rviz::StringProperty* root_link_name_property_;
   rviz::RosTopicProperty* robot_path_topic_property_;
+  rviz::StringProperty* robot_description_property_;
 };
 
 } // namespace moveit_rviz_plugin
