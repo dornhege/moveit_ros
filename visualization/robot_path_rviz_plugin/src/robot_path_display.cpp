@@ -65,10 +65,10 @@
 namespace moveit_rviz_plugin
 {
 
-RobotCnt::RobotCnt(robot_model::RobotModelPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot){
-  this->model_ = model;
-  this->state_ = state;
-  this->robot_ = robot;
+RobotCnt::RobotCnt(robot_model::RobotModelConstPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot){
+  model_ = model;
+  state_ = state;
+  robot_ = robot;
 }
 // ******************************************************************************************
 // Base class contructor
@@ -101,15 +101,6 @@ RobotPathDisplay::RobotPathDisplay() :
                                                            this,
                                                            SLOT( changedAttachedBodyColor() ), this );
   
-  /*enable_link_highlight_ = new rviz::BoolProperty("Show Highlights", true, "Specifies whether link highlighting is enabled",
-                                                  this, SLOT( changedEnableLinkHighlight() ), this);
-  enable_visual_visible_ = new rviz::BoolProperty("Visual Enabled", true, "Whether to display the visual representation of the robot.",
-                                                  this, SLOT( changedEnableVisualVisible() ), this);
-  enable_collision_visible_ = new rviz::BoolProperty("Collision Enabled", false, "Whether to display the collision representation of the robot.",
-                                                  this, SLOT( changedEnableCollisionVisible() ), this);
-
-  show_all_links_ = new rviz::BoolProperty("Show All Links", true, "Toggle all links visibility on or off.",
-                                           this, SLOT( changedAllLinks() ), this);*/
 }
 
 // ******************************************************************************************
@@ -156,7 +147,8 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
   {
     const boost::shared_ptr<srdf::Model> &srdf = rdf_loader_->getSRDF() ? rdf_loader_->getSRDF() : boost::shared_ptr<srdf::Model>(new srdf::Model());
     const boost::shared_ptr<urdf::ModelInterface> &mdliface = rdf_loader_->getURDF();
-    robot_model::RobotModelPtr rmodel = robot_model::RobotModelPtr(new robot_model::RobotModel(mdliface, srdf));
+    //robot_model::RobotModelPtr rmodel = robot_model::RobotModelPtr(new robot_model::RobotModel(mdliface, srdf));
+    robot_model::RobotModelConstPtr rmodel = kmodel_;
     
     int i = 0;
     forEach(const geometry_msgs::PoseStamped ps, path->poses){
