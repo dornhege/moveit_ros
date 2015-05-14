@@ -67,10 +67,9 @@ namespace moveit_rviz_plugin
 
 class RobotCnt {
 public:
-  RobotCnt(robot_model::RobotModelConstPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot);
+  RobotCnt(robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot);
   ~RobotCnt() {}
   
-  robot_model::RobotModelConstPtr model_;
   robot_state::RobotStatePtr state_;
   RobotStateVisualizationPtr robot_;
 };
@@ -98,8 +97,7 @@ private Q_SLOTS:
   // Slot Event Functions
   // ******************************************************************************************
   void changedRobotDescription();
-  void changedRobotSceneAlpha();
-  void changedAttachedBodyColor();
+  void changedRobotSceneAlphaOrColor();
   void changedRobotPathTopic();
 
 protected:

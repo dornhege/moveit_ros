@@ -65,8 +65,7 @@
 namespace moveit_rviz_plugin
 {
 
-RobotCnt::RobotCnt(robot_model::RobotModelConstPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot){
-  model_ = model;
+RobotCnt::RobotCnt(robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot){
   state_ = state;
   robot_ = robot;
 }
@@ -93,13 +92,13 @@ RobotPathDisplay::RobotPathDisplay() :
   robot_alpha_property_ =
     new rviz::FloatProperty( "Robot Alpha", 0.5f, "Specifies the alpha for the robot links",
                              this,
-                             SLOT( changedRobotSceneAlpha() ), this );
+                             SLOT( changedRobotSceneAlphaOrColor() ), this );
   robot_alpha_property_->setMin( 0.0 );
   robot_alpha_property_->setMax( 1.0 );
 
   attached_body_color_property_ = new rviz::ColorProperty( "Attached Body Color", QColor(150, 50, 150), "The color for the attached bodies",
                                                            this,
-                                                           SLOT( changedAttachedBodyColor() ), this );
+                                                           SLOT( changedRobotSceneAlphaOrColor() ), this );
   
 }
 
@@ -135,95 +134,54 @@ static bool operator!=(const std_msgs::ColorRGBA& a, const std_msgs::ColorRGBA& 
 void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
 {
   robots_.clear();
-  if(!path){
-    setStatus( rviz::StatusProperty::Error, "RobotPath", "Path is null" );
+  if(!path || path->poses.size() < 1){
+    setStatus( rviz::StatusProperty::Error, "RobotPath", "Path is null or empty" );
     return;
   }
   ROS_INFO_STREAM("Path length: " << path->poses.size());
+
   
-  if (!rdf_loader_)
-    rdf_loader_.reset(new rdf_loader::RDFLoader(robot_description_property_->getStdString()));
-  if (rdf_loader_->getURDF())
-  {
-    const boost::shared_ptr<srdf::Model> &srdf = rdf_loader_->getSRDF() ? rdf_loader_->getSRDF() : boost::shared_ptr<srdf::Model>(new srdf::Model());
-    const boost::shared_ptr<urdf::ModelInterface> &mdliface = rdf_loader_->getURDF();
-    //robot_model::RobotModelPtr rmodel = robot_model::RobotModelPtr(new robot_model::RobotModel(mdliface, srdf));
-    robot_model::RobotModelConstPtr rmodel = kmodel_;
+  int i = 0;
+  forEach(const geometry_msgs::PoseStamped ps, path->poses){
+    i++;
+    if(!(i == path->poses.size() || i == (int)(path->poses.size()/2)) )
+      continue;
     
-    int i = 0;
-    forEach(const geometry_msgs::PoseStamped ps, path->poses){
-      i++;
-      if(i < path->poses.size())
-        continue;
-      
-      robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(rmodel));
-      rstate->setToDefaultValues();
-      std::string rootlinkname = rmodel->getRootLinkName();
-      Eigen::Affine3d base_tf = rstate->getGlobalLinkTransform(rootlinkname);
-      Eigen::Affine3d epose;
-      tf::poseMsgToEigen(ps.pose, epose);
-      base_tf = base_tf * epose;
-      
-      rstate->setJointPositions(rmodel->getRootJoint(), base_tf);
-      RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
-      rrobot->load(*rmodel->getURDF());
-      
-      rstate->update();
-      rrobot->update(rstate);
-      rrobot->setVisible(true);
-      
-      QColor color = attached_body_color_property_->getColor();
-      std_msgs::ColorRGBA color_msg;
-      color_msg.r = color.redF();
-      color_msg.g = color.greenF();
-      color_msg.b = color.blueF();
-      color_msg.a = robot_alpha_property_->getFloat();
-      rrobot->setDefaultAttachedObjectColor(color_msg);
-      
-      robots_.push_back(RobotCntConstPtr(new RobotCnt(rmodel, rstate, rrobot)));
+    // Setup State
+    robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(kmodel_));
+    rstate->setToDefaultValues();
+    Eigen::Affine3d base_tf = rstate->getGlobalLinkTransform(kmodel_->getRootLinkName());
+    Eigen::Affine3d epose;
+    tf::poseMsgToEigen(ps.pose, epose);
+    base_tf = base_tf * epose;    
+    rstate->setJointPositions(kmodel_->getRootJoint(), base_tf);
+    
+    // Setup Robot
+    RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
+    rrobot->load(*kmodel_->getURDF());        
+    const QColor color = QColor::fromHsv ((int)(i/path->poses.size()*300), 255, 255, robot_alpha_property_->getFloat());
+    rrobot->setAlpha(robot_alpha_property_->getFloat());
+    forEach(std::string ln, kmodel_->getLinkModelNames()){
+        rviz::RobotLink *link = rrobot->getRobot().getLink(ln); 
+        // Check if link exists
+        if (link)
+          link->setColor(color.redF(), color.greenF(), color.blueF());
     }
-    setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );  
+        
+    rstate->update();
+    rrobot->update(rstate);
+    robots_.push_back(RobotCntConstPtr(new RobotCnt(rstate, rrobot)));
   }
-  else
-    setStatus( rviz::StatusProperty::Error, "RobotPath", "Couldn't load Robot Model" );
-  
-  ROS_INFO_STREAM("robots_ length: " << robots_.size());
-//   TODO get current state from PlanningScene and set our state from that.
-//   possibly use TF to construct a robot_state::Transforms object to pass in to the conversion functio?  
+  setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );  
   update_state_ = true;
 }
 
-void RobotPathDisplay::changedAttachedBodyColor()
+void RobotPathDisplay::changedRobotSceneAlphaOrColor()
 {
   if (&robots_)
   {
     forEach(RobotCntConstPtr rb, robots_){
       rb->robot_->setAlpha(robot_alpha_property_->getFloat());
-      QColor color = attached_body_color_property_->getColor();
-      std_msgs::ColorRGBA color_msg;
-      color_msg.r = color.redF();
-      color_msg.g = color.greenF();
-      color_msg.b = color.blueF();
-      color_msg.a = robot_alpha_property_->getFloat();
-      rb->robot_->setDefaultAttachedObjectColor(color_msg);    
-    }
-    update_state_ = true;
-  }
-}
-
-void RobotPathDisplay::changedRobotSceneAlpha()
-{
-  if (&robots_)
-  {
-    forEach(RobotCntConstPtr rb, robots_){
-      rb->robot_->setAlpha(robot_alpha_property_->getFloat());
-      QColor color = attached_body_color_property_->getColor();
-      std_msgs::ColorRGBA color_msg;
-      color_msg.r = color.redF();
-      color_msg.g = color.greenF();
-      color_msg.b = color.blueF();
-      color_msg.a = robot_alpha_property_->getFloat();
-      rb->robot_->setDefaultAttachedObjectColor(color_msg);    
     }
     update_state_ = true;
   }
@@ -267,6 +225,8 @@ void RobotPathDisplay::onEnable()
   Display::onEnable();
   loadRobotModel();
   calculateOffsetPosition();
+  robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
+  robots_.clear();
 }
 
 // ******************************************************************************************
@@ -275,6 +235,7 @@ void RobotPathDisplay::onEnable()
 void RobotPathDisplay::onDisable()
 {
   robots_.clear();
+  robot_path_subscriber_.shutdown();
   Display::onDisable();
 }
 
