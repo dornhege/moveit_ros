@@ -68,7 +68,7 @@ namespace moveit_rviz_plugin
 class RobotCnt {
 public:
   RobotCnt(robot_model::RobotModelConstPtr model, robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot);
-  ~RobotCnt();
+  ~RobotCnt() {}
   
   robot_model::RobotModelConstPtr model_;
   robot_state::RobotStatePtr state_;
