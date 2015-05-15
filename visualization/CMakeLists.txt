@@ -34,6 +34,7 @@ find_package(catkin REQUIRED COMPONENTS
   rosconsole
   object_recognition_msgs
   nav_msgs
+  geometry_msgs
 )
 find_package(Eigen REQUIRED)
 catkin_python_setup()

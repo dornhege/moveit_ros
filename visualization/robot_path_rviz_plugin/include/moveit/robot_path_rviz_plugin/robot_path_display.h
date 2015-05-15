@@ -97,8 +97,9 @@ private Q_SLOTS:
   // Slot Event Functions
   // ******************************************************************************************
   void changedRobotDescription();
-  void changedRobotSceneAlphaOrColor();
   void changedRobotPathTopic();
+  void changedRobotSceneAlpha();
+  void doNothing();
 
 protected:
   
@@ -125,12 +126,13 @@ protected:
   std::vector<RobotCntConstPtr> robots_;
   
   robot_model::RobotModelConstPtr kmodel_;
-  rviz::FloatProperty* robot_alpha_property_;
-  rviz::ColorProperty* attached_body_color_property_;
-  bool update_state_;
-
   rviz::RosTopicProperty* robot_path_topic_property_;
   rviz::StringProperty* robot_description_property_;
+  rviz::FloatProperty* robot_alpha_property_;
+  rviz::FloatProperty* robot_deltatheta_property_;
+  rviz::FloatProperty* robot_deltadist_property_;
+  bool update_state_;
+
 };
 
 } // namespace moveit_rviz_plugin

@@ -50,17 +50,16 @@
 #include <rviz/display_context.h>
 #include <rviz/frame_manager.h>
 #include <tf/transform_listener.h>
-#include <tf_conversions/tf_eigen.h>
+#include <tf/transform_datatypes.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/Pose.h>
-#include <geometry_msgs/Quaternion.h>
 
 #include <OgreSceneManager.h>
 #include <OgreSceneNode.h>
 
 #include <boost/foreach.hpp>
 #define forEach BOOST_FOREACH
+#define PI 3.14159265358979323846
 
 namespace moveit_rviz_plugin
 {
@@ -79,26 +78,30 @@ RobotPathDisplay::RobotPathDisplay() :
   robot_path_topic_property_ =
     new rviz::RosTopicProperty( "Robot Path Topic", "",
                                 ros::message_traits::datatype<nav_msgs::Path>(),
-                                "The topic on which the nav_msgs::Path messages are received",
-                                this,
+                                "The topic on which the nav_msgs::Path messages are received", this,
                                 SLOT( changedRobotPathTopic() ), this );
-    
   robot_description_property_ =
-    new rviz::StringProperty( "Robot Description", "robot_description", "The name of the ROS parameter where the URDF for the robot is loaded",
-                              this,
+    new rviz::StringProperty( "Robot Description", "robot_description", "The name of the ROS parameter where the URDF for the robot is loaded", this,
                               SLOT( changedRobotDescription() ), this );
   
   // Planning scene category -------------------------------------------------------------------------------------------
   robot_alpha_property_ =
-    new rviz::FloatProperty( "Robot Alpha", 0.5f, "Specifies the alpha for the robot links",
-                             this,
-                             SLOT( changedRobotSceneAlphaOrColor() ), this );
-  robot_alpha_property_->setMin( 0.0 );
+    new rviz::FloatProperty( "Robot Alpha", 0.6f, "Specifies the alpha for the robot links", this,
+                             SLOT( changedRobotSceneAlpha() ), this );
+  robot_alpha_property_->setMin( 0.1 );
   robot_alpha_property_->setMax( 1.0 );
-
-  attached_body_color_property_ = new rviz::ColorProperty( "Attached Body Color", QColor(150, 50, 150), "The color for the attached bodies",
-                                                           this,
-                                                           SLOT( changedRobotSceneAlphaOrColor() ), this );
+    
+  robot_deltatheta_property_ =
+    new rviz::FloatProperty( "Theta Draw Threshold", 15.0f, "Specifies the angle in degree that triggers a draw",  this,
+                             SLOT( doNothing() ), this );
+  robot_deltatheta_property_->setMin( 0.0 );
+  robot_deltatheta_property_->setMax( 360.0 );
+    
+  robot_deltadist_property_ =
+    new rviz::FloatProperty( "Distance Draw Threshold", 1.0f, "Specifies the distance in degree that triggers a draw", this,
+                             SLOT( doNothing() ), this );
+  robot_deltadist_property_->setMin( 1.0 );
+    
   
 }
 
@@ -138,14 +141,37 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
     setStatus( rviz::StatusProperty::Error, "RobotPath", "Path is null or empty" );
     return;
   }
-  ROS_INFO_STREAM("Path length: " << path->poses.size());
+  ROS_DEBUG_STREAM("Path length: " << path->poses.size());
 
   
   int i = 0;
+  const geometry_msgs::PoseStamped* lastDrawnPoseStamped = NULL;
   forEach(const geometry_msgs::PoseStamped ps, path->poses){
     i++;
-    if(!(i == path->poses.size() || i == (int)(path->poses.size()/2)) )
-      continue;
+    if(lastDrawnPoseStamped != NULL){
+      
+      tf::Quaternion tfquatp;
+      tf::quaternionMsgToTF(ps.pose.orientation, tfquatp);
+      double pyaw = tf::getYaw(tfquatp);      
+      tf::Quaternion tfquatlp;
+      tf::quaternionMsgToTF(lastDrawnPoseStamped->pose.orientation, tfquatlp);      
+      double lpyaw = tf::getYaw(tfquatlp);
+
+      float deltatheta = fabs(pyaw - lpyaw) * 180 / PI;
+      float deltadist = hypot(ps.pose.position.x - lastDrawnPoseStamped->pose.position.x,
+                              ps.pose.position.y - lastDrawnPoseStamped->pose.position.y);
+      if(i != path->poses.size() 
+          && deltatheta < robot_deltatheta_property_->getFloat() 
+          && deltadist < robot_deltadist_property_->getFloat())
+        continue;
+      ROS_INFO_STREAM("##################################" << i << "/" << path->poses.size());
+      ROS_INFO_STREAM("Hue: " << ((float)i/path->poses.size()*300));
+      ROS_INFO_STREAM("DDistance: " << deltadist);
+      ROS_INFO_STREAM("DTheta(Rads): " << deltatheta / 180 * PI << " DTheta(Deg): " << deltatheta);
+    }    
+    if(i == path->poses.size() && !robots_.empty()){
+      robots_.pop_back();
+    }
     
     // Setup State
     robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(kmodel_));
@@ -158,8 +184,8 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
     
     // Setup Robot
     RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
-    rrobot->load(*kmodel_->getURDF());        
-    const QColor color = QColor::fromHsv ((int)(i/path->poses.size()*300), 255, 255, robot_alpha_property_->getFloat());
+    rrobot->load(*kmodel_->getURDF());
+    const QColor color = QColor::fromHsv ((float)i/path->poses.size()*300, 255, 255, robot_alpha_property_->getFloat());
     rrobot->setAlpha(robot_alpha_property_->getFloat());
     forEach(std::string ln, kmodel_->getLinkModelNames()){
         rviz::RobotLink *link = rrobot->getRobot().getLink(ln); 
@@ -167,16 +193,21 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
         if (link)
           link->setColor(color.redF(), color.greenF(), color.blueF());
     }
-        
+    
     rstate->update();
     rrobot->update(rstate);
     robots_.push_back(RobotCntConstPtr(new RobotCnt(rstate, rrobot)));
+    lastDrawnPoseStamped = &path->poses[i-1];    
+    ROS_INFO_STREAM("##################################" << i << "/" << path->poses.size());
   }
-  setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );  
+  setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );
   update_state_ = true;
 }
+void RobotPathDisplay::doNothing()
+{  
+}
 
-void RobotPathDisplay::changedRobotSceneAlphaOrColor()
+void RobotPathDisplay::changedRobotSceneAlpha()
 {
   if (&robots_)
   {
@@ -242,7 +273,7 @@ void RobotPathDisplay::onDisable()
 void RobotPathDisplay::update(float wall_dt, float ros_dt)
 {
   Display::update(wall_dt, ros_dt);
-  if (&robots_ && update_state_)
+  if (update_state_)
   {
     forEach(RobotCntConstPtr rb, robots_){
       rb->state_->update();
