@@ -32,6 +32,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
+/* Author: Philipp Jankov*/
 /* Author: Ioan Sucan */
 
 #include <moveit/robot_path_rviz_plugin/robot_path_display.h>
@@ -86,21 +87,21 @@ RobotPathDisplay::RobotPathDisplay() :
   
   // Planning scene category -------------------------------------------------------------------------------------------
   robot_alpha_property_ =
-    new rviz::FloatProperty( "Robot Alpha", 0.6f, "Specifies the alpha for the robot links", this,
-                             SLOT( changedRobotSceneAlpha() ), this );
+    new rviz::FloatProperty( "Robot Max Alpha", 0.8, "Specifies the alpha for the last drawn robot. First starts with 0.1", this,
+                             SLOT( redrawPath() ), this );
   robot_alpha_property_->setMin( 0.1 );
   robot_alpha_property_->setMax( 1.0 );
     
   robot_deltatheta_property_ =
-    new rviz::FloatProperty( "Theta Draw Threshold", 15.0f, "Specifies the angle in degree that triggers a draw",  this,
-                             SLOT( doNothing() ), this );
+    new rviz::FloatProperty( "Theta Draw Threshold", 15.0, "Specifies the angle in degree that triggers a draw",  this,
+                             SLOT( redrawPath() ), this );
   robot_deltatheta_property_->setMin( 0.0 );
   robot_deltatheta_property_->setMax( 360.0 );
     
   robot_deltadist_property_ =
-    new rviz::FloatProperty( "Distance Draw Threshold", 1.0f, "Specifies the distance in degree that triggers a draw", this,
-                             SLOT( doNothing() ), this );
-  robot_deltadist_property_->setMin( 1.0 );
+    new rviz::FloatProperty( "Distance Draw Threshold", 1.0, "Specifies the distance in degree that triggers a draw", this,
+                             SLOT( redrawPath() ), this );
+  robot_deltadist_property_->setMin( 0.025 );
     
   
 }
@@ -118,33 +119,27 @@ void RobotPathDisplay::onInitialize()
 }
 
 void RobotPathDisplay::reset()
-{  
+{
   robots_.clear();
+  last_known_path_ = nav_msgs::PathConstPtr();
   rdf_loader_.reset();
-
   loadRobotModel();
   Display::reset();
 }
 
-static bool operator!=(const std_msgs::ColorRGBA& a, const std_msgs::ColorRGBA& b)
-{
-  return a.r != b.r ||
-         a.g != b.g ||
-         a.b != b.b ||
-         a.a != b.a;
-}
-
 void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
 {
+  last_known_path_ = path;
   robots_.clear();
   if(!path || path->poses.size() < 1){
-    setStatus( rviz::StatusProperty::Error, "RobotPath", "Path is null or empty" );
+    setStatus( rviz::StatusProperty::Warn, "RobotPath", "Path is null or empty" );
     return;
   }
   ROS_DEBUG_STREAM("Path length: " << path->poses.size());
 
   
   int i = 0;
+  float ralpha = 0.1;  
   const geometry_msgs::PoseStamped* lastDrawnPoseStamped = NULL;
   forEach(const geometry_msgs::PoseStamped ps, path->poses){
     i++;
@@ -164,14 +159,17 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
           && deltatheta < robot_deltatheta_property_->getFloat() 
           && deltadist < robot_deltadist_property_->getFloat())
         continue;
-      ROS_INFO_STREAM("##################################" << i << "/" << path->poses.size());
-      ROS_INFO_STREAM("Hue: " << ((float)i/path->poses.size()*300));
-      ROS_INFO_STREAM("DDistance: " << deltadist);
-      ROS_INFO_STREAM("DTheta(Rads): " << deltatheta / 180 * PI << " DTheta(Deg): " << deltatheta);
+      
+      ralpha = robot_alpha_property_->getFloat() - 0.1 * i / path->poses.size();
+      ROS_DEBUG_STREAM("##################################" << i << "/" << path->poses.size());
+      ROS_DEBUG_STREAM("Hue: " << ((float)i / path->poses.size()*300));
+      ROS_DEBUG_STREAM("DDistance: " << deltadist);
+      ROS_DEBUG_STREAM("Alpha: " << ralpha);
+      ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta / 180 * PI << " DTheta(Deg): " << deltatheta);
     }    
-    if(i == path->poses.size() && !robots_.empty()){
-      robots_.pop_back();
-    }
+//     if(i == path->poses.size() && !robots_.empty()){
+//       robots_.pop_back();
+//     }
     
     // Setup State
     robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(kmodel_));
@@ -185,8 +183,8 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
     // Setup Robot
     RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
     rrobot->load(*kmodel_->getURDF());
-    const QColor color = QColor::fromHsv ((float)i/path->poses.size()*300, 255, 255, robot_alpha_property_->getFloat());
-    rrobot->setAlpha(robot_alpha_property_->getFloat());
+    const QColor color = QColor::fromHsv ((float)i / path->poses.size() * 300, 255, 255, ralpha);
+    rrobot->setAlpha(ralpha);
     forEach(std::string ln, kmodel_->getLinkModelNames()){
         rviz::RobotLink *link = rrobot->getRobot().getLink(ln); 
         // Check if link exists
@@ -194,28 +192,19 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
           link->setColor(color.redF(), color.greenF(), color.blueF());
     }
     
-    rstate->update();
-    rrobot->update(rstate);
     robots_.push_back(RobotCntConstPtr(new RobotCnt(rstate, rrobot)));
-    lastDrawnPoseStamped = &path->poses[i-1];    
-    ROS_INFO_STREAM("##################################" << i << "/" << path->poses.size());
+    if(lastDrawnPoseStamped != NULL)
+      ROS_DEBUG_STREAM("##################################" << i << "/" << path->poses.size());
+    lastDrawnPoseStamped = &path->poses[i - 1];
   }
   setStatus( rviz::StatusProperty::Ok, "RobotPath", "Path Visualization Successfull" );
   update_state_ = true;
 }
-void RobotPathDisplay::doNothing()
-{  
-}
 
-void RobotPathDisplay::changedRobotSceneAlpha()
+void RobotPathDisplay::redrawPath()
 {
-  if (&robots_)
-  {
-    forEach(RobotCntConstPtr rb, robots_){
-      rb->robot_->setAlpha(robot_alpha_property_->getFloat());
-    }
-    update_state_ = true;
-  }
+  newRobotPathCallback(last_known_path_);
+  update_state_ = true;
 }
 
 void RobotPathDisplay::changedRobotDescription()
@@ -225,10 +214,11 @@ void RobotPathDisplay::changedRobotDescription()
 }
 
 void RobotPathDisplay::changedRobotPathTopic()
-{
+{  
+  robots_.clear();
+  last_known_path_ = nav_msgs::PathConstPtr();
   robot_path_subscriber_.shutdown();
   robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
-  robots_.clear();
 }
 
 // ******************************************************************************************
@@ -258,6 +248,7 @@ void RobotPathDisplay::onEnable()
   calculateOffsetPosition();
   robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
   robots_.clear();
+  last_known_path_ = nav_msgs::PathConstPtr();
 }
 
 // ******************************************************************************************
@@ -266,6 +257,7 @@ void RobotPathDisplay::onEnable()
 void RobotPathDisplay::onDisable()
 {
   robots_.clear();
+  last_known_path_ = nav_msgs::PathConstPtr();
   robot_path_subscriber_.shutdown();
   Display::onDisable();
 }

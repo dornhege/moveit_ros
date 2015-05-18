@@ -32,6 +32,7 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
+/* Author: Philipp Jankov*/
 /* Author: Ioan Sucan */
 
 #ifndef MOVEIT_VISUALIZATION_ROBOT_PATH_DISPLAY_RVIZ_ROBOT_STATE_DISPLAY_
@@ -98,8 +99,7 @@ private Q_SLOTS:
   // ******************************************************************************************
   void changedRobotDescription();
   void changedRobotPathTopic();
-  void changedRobotSceneAlpha();
-  void doNothing();
+  void redrawPath();
 
 protected:
   
@@ -118,11 +118,12 @@ protected:
   virtual void onDisable();
   virtual void fixedFrameChanged();
 
-  // render the robot
+  // render the robots
   ros::NodeHandle root_nh_;
   ros::Subscriber robot_path_subscriber_;
 
   rdf_loader::RDFLoaderPtr rdf_loader_;
+  nav_msgs::PathConstPtr last_known_path_;
   std::vector<RobotCntConstPtr> robots_;
   
   robot_model::RobotModelConstPtr kmodel_;
