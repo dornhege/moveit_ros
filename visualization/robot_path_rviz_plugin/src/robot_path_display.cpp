@@ -221,7 +221,8 @@ void RobotPathDisplay::changedRobotPathTopic()
   robots_.clear();
   last_known_path_ = nav_msgs::PathConstPtr();
   robot_path_subscriber_.shutdown();
-  robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
+  if(!robot_path_topic_property_->getStdString().empty())
+      robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
 }
 
 // ******************************************************************************************
@@ -249,7 +250,8 @@ void RobotPathDisplay::onEnable()
   Display::onEnable();
   loadRobotModel();
   calculateOffsetPosition();
-  robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
+  if(!robot_path_topic_property_->getStdString().empty())
+      robot_path_subscriber_ = root_nh_.subscribe(robot_path_topic_property_->getStdString(), 10, &RobotPathDisplay::newRobotPathCallback, this);
   robots_.clear();
   last_known_path_ = nav_msgs::PathConstPtr();
 }
