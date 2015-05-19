@@ -129,6 +129,9 @@ void RobotPathDisplay::reset()
 
 void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
 {
+  if(!kmodel_)
+      return;
+
   last_known_path_ = path;
   robots_.clear();
   if(!path || path->poses.size() < 1){
