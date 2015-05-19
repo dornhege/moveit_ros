@@ -60,7 +60,6 @@
 
 #include <boost/foreach.hpp>
 #define forEach BOOST_FOREACH
-#define PI 3.14159265358979323846
 
 namespace moveit_rviz_plugin
 {
@@ -93,13 +92,13 @@ RobotPathDisplay::RobotPathDisplay() :
   robot_alpha_property_->setMax( 1.0 );
     
   robot_deltatheta_property_ =
-    new rviz::FloatProperty( "Theta Draw Threshold", 15.0, "Specifies the angle in degree that triggers a draw",  this,
+    new rviz::FloatProperty( "Theta Draw Threshold", 0.1, "Specifies the angle in radians that triggers a draw",  this,
                              SLOT( redrawPath() ), this );
   robot_deltatheta_property_->setMin( 0.0 );
-  robot_deltatheta_property_->setMax( 360.0 );
+  robot_deltatheta_property_->setMax(2*M_PI );
     
   robot_deltadist_property_ =
-    new rviz::FloatProperty( "Distance Draw Threshold", 1.0, "Specifies the distance in degree that triggers a draw", this,
+    new rviz::FloatProperty( "Distance Draw Threshold", 0.2, "Specifies the distance in meters that triggers a draw", this,
                              SLOT( redrawPath() ), this );
   robot_deltadist_property_->setMin( 0.025 );
     
@@ -155,7 +154,7 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
       tf::quaternionMsgToTF(lastDrawnPoseStamped->pose.orientation, tfquatlp);      
       double lpyaw = tf::getYaw(tfquatlp);
 
-      float deltatheta = fabs(pyaw - lpyaw) * 180 / PI;
+      float deltatheta = fabs(pyaw - lpyaw);
       float deltadist = hypot(ps.pose.position.x - lastDrawnPoseStamped->pose.position.x,
                               ps.pose.position.y - lastDrawnPoseStamped->pose.position.y);
       if(i != path->poses.size() 
@@ -168,7 +167,7 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
       ROS_DEBUG_STREAM("Hue: " << ((float)i / path->poses.size()*300));
       ROS_DEBUG_STREAM("DDistance: " << deltadist);
       ROS_DEBUG_STREAM("Alpha: " << ralpha);
-      ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta / 180 * PI << " DTheta(Deg): " << deltatheta);
+      ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta / 180 * M_PI << " DTheta(Deg): " << deltatheta);
     }    
 //     if(i == path->poses.size() && !robots_.empty()){
 //       robots_.pop_back();
