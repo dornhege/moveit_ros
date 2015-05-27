@@ -35,13 +35,14 @@
 /* Author: Philipp Jankov*/
 /* Author: Ioan Sucan */
 
-#ifndef MOVEIT_VISUALIZATION_ROBOT_PATH_DISPLAY_RVIZ_ROBOT_STATE_DISPLAY_
-#define MOVEIT_VISUALIZATION_ROBOT_PATH_DISPLAY_RVIZ_ROBOT_STATE_DISPLAY_
+#ifndef MOVEIT_VISUALIZATION_ROBOT_PATH_DISPLAY_RVIZ_ROBOT_PATH_DISPLAY_
+#define MOVEIT_VISUALIZATION_ROBOT_PATH_DISPLAY_RVIZ_ROBOT_PATH_DISPLAY_
 
 #include <rviz/display.h>
 
 #ifndef Q_MOC_RUN
 #include <moveit/rdf_loader/rdf_loader.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/rviz_plugin_render_tools/robot_state_visualization.h>
 #include <moveit_msgs/DisplayRobotState.h>
 #include <ros/ros.h>
@@ -70,14 +71,14 @@ class RobotCnt {
 public:
   RobotCnt(robot_state::RobotStatePtr state, RobotStateVisualizationPtr robot);
   ~RobotCnt() {}
-  
+
   robot_state::RobotStatePtr state_;
   RobotStateVisualizationPtr robot_;
 };
 
 typedef boost::shared_ptr< ::moveit_rviz_plugin::RobotCnt > RobotCntPtr;
 typedef boost::shared_ptr< ::moveit_rviz_plugin::RobotCnt const > RobotCntConstPtr;
-  
+
 class RobotPathVisualization;
 
 class RobotPathDisplay : public rviz::Display
@@ -102,7 +103,7 @@ private Q_SLOTS:
   void redrawPath();
 
 protected:
-  
+
   void loadRobotModel();
 
   /**
@@ -125,11 +126,15 @@ protected:
   rdf_loader::RDFLoaderPtr rdf_loader_;
   nav_msgs::PathConstPtr last_known_path_;
   std::vector<RobotCntConstPtr> robots_;
-  
+
+  planning_scene_monitor::PlanningSceneMonitorPtr kpsm_;
   robot_model::RobotModelConstPtr kmodel_;
   rviz::RosTopicProperty* robot_path_topic_property_;
   rviz::StringProperty* robot_description_property_;
-  rviz::FloatProperty* robot_alpha_property_;
+  rviz::FloatProperty* robot_alpha_start_property_;
+  rviz::FloatProperty* robot_alpha_end_property_;
+  rviz::FloatProperty* robot_hue_start_property_;
+  rviz::FloatProperty* robot_hue_end_property_;
   rviz::FloatProperty* robot_deltatheta_property_;
   rviz::FloatProperty* robot_deltadist_property_;
   bool update_state_;

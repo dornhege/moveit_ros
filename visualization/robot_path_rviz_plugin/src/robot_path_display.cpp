@@ -83,26 +83,43 @@ RobotPathDisplay::RobotPathDisplay() :
   robot_description_property_ =
     new rviz::StringProperty( "Robot Description", "robot_description", "The name of the ROS parameter where the URDF for the robot is loaded", this,
                               SLOT( changedRobotDescription() ), this );
-  
+
   // Planning scene category -------------------------------------------------------------------------------------------
-  robot_alpha_property_ =
-    new rviz::FloatProperty( "Robot Max Alpha", 0.8, "Specifies the alpha for the last drawn robot. First starts with 0.1", this,
+  robot_alpha_start_property_ =
+    new rviz::FloatProperty( "Robot Alpha Start", 0.1, "Specifies the alpha for the first drawn robot.", this,
                              SLOT( redrawPath() ), this );
-  robot_alpha_property_->setMin( 0.1 );
-  robot_alpha_property_->setMax( 1.0 );
-    
+  robot_alpha_start_property_->setMin( 0.0 );
+  robot_alpha_start_property_->setMax( 1.0 );
+
+  robot_alpha_end_property_ =
+    new rviz::FloatProperty( "Robot Alpha End", 0.8, "Specifies the alpha for the last drawn robot.", this,
+                             SLOT( redrawPath() ), this );
+  robot_alpha_end_property_->setMin( 0.0 );
+  robot_alpha_end_property_->setMax( 1.0 );
+
+  robot_hue_start_property_ =
+    new rviz::FloatProperty( "Robot Hue Start", 120.0, "Specifies the hue for the first drawn robot.", this,
+                             SLOT( redrawPath() ), this );
+  robot_hue_start_property_->setMin( 0.0 );
+  robot_hue_start_property_->setMax( 360.0 );
+
+  robot_hue_end_property_ =
+    new rviz::FloatProperty( "Robot Hue End", 120.0, "Specifies the hue for the last drawn robot.", this,
+                             SLOT( redrawPath() ), this );
+  robot_hue_end_property_->setMin( 0.0 );
+  robot_hue_end_property_->setMax( 360.0 );
+
   robot_deltatheta_property_ =
-    new rviz::FloatProperty( "Theta Draw Threshold", 0.1, "Specifies the angle in radians that triggers a draw",  this,
+    new rviz::FloatProperty( "Theta Draw Threshold", 1.1, "Specifies the angle in radians that triggers a draw",  this,
                              SLOT( redrawPath() ), this );
   robot_deltatheta_property_->setMin( 0.0 );
   robot_deltatheta_property_->setMax(2*M_PI );
-    
+
   robot_deltadist_property_ =
     new rviz::FloatProperty( "Distance Draw Threshold", 0.2, "Specifies the distance in meters that triggers a draw", this,
                              SLOT( redrawPath() ), this );
   robot_deltadist_property_->setMin( 0.025 );
-    
-  
+
 }
 
 // ******************************************************************************************
@@ -122,6 +139,7 @@ void RobotPathDisplay::reset()
   robots_.clear();
   last_known_path_ = nav_msgs::PathConstPtr();
   rdf_loader_.reset();
+  kpsm_.reset(new planning_scene_monitor::PlanningSceneMonitor(robot_description_property_->getStdString()));
   loadRobotModel();
   Display::reset();
 }
@@ -130,23 +148,26 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
 {
   if(!kmodel_)
       return;
-
-  last_known_path_ = path;
-  robots_.clear();
   if(!path || path->poses.size() < 1){
     setStatus( rviz::StatusProperty::Warn, "RobotPath", "Path is null or empty" );
     return;
   }
   ROS_DEBUG_STREAM("Path length: " << path->poses.size());
 
-  
+  last_known_path_ = path;
+  robots_.clear();
+  if(!kpsm_ || !kpsm_->requestPlanningSceneState()) return;
+  planning_scene_monitor::LockedPlanningSceneRO psm(kpsm_);
+  robot_state::RobotState current_state = psm->getCurrentState(); 
+
   int i = 0;
-  float ralpha = 0.1;  
+  float ralpha = robot_alpha_start_property_->getFloat();
+  float rhue = robot_hue_start_property_->getFloat();
   const geometry_msgs::PoseStamped* lastDrawnPoseStamped = NULL;
   forEach(const geometry_msgs::PoseStamped ps, path->poses){
     i++;
     if(lastDrawnPoseStamped != NULL){
-      
+
       tf::Quaternion tfquatp;
       tf::quaternionMsgToTF(ps.pose.orientation, tfquatp);
       double pyaw = tf::getYaw(tfquatp);      
@@ -161,31 +182,31 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
           && deltatheta < robot_deltatheta_property_->getFloat() 
           && deltadist < robot_deltadist_property_->getFloat())
         continue;
-      
-      ralpha = robot_alpha_property_->getFloat() - 0.1 * i / path->poses.size();
+
+      float progress = (float)i / path->poses.size();
+      float huediff = robot_hue_end_property_->getFloat() - robot_hue_start_property_->getFloat();
+      rhue =  robot_hue_start_property_->getFloat() + (huediff * progress);
+      float alphadiff = robot_alpha_end_property_->getFloat() - robot_alpha_start_property_->getFloat();
+      ralpha =  robot_alpha_start_property_->getFloat() + (alphadiff * progress);
       ROS_DEBUG_STREAM("##################################" << i << "/" << path->poses.size());
-      ROS_DEBUG_STREAM("Hue: " << ((float)i / path->poses.size()*300));
+      ROS_DEBUG_STREAM("Hue: " << rhue);
       ROS_DEBUG_STREAM("DDistance: " << deltadist);
       ROS_DEBUG_STREAM("Alpha: " << ralpha);
-      ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta / 180 * M_PI << " DTheta(Deg): " << deltatheta);
-    }    
-//     if(i == path->poses.size() && !robots_.empty()){
-//       robots_.pop_back();
-//     }
-    
+      ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta << " DTheta(Deg): " << deltatheta * 180 / M_PI);
+    }
+
     // Setup State
-    robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(kmodel_));
-    rstate->setToDefaultValues();
-    Eigen::Affine3d base_tf = rstate->getGlobalLinkTransform(kmodel_->getRootLinkName());
+    robot_state::RobotStatePtr rstate = robot_state::RobotStatePtr(new robot_state::RobotState(current_state));
+    //Eigen::Affine3d base_tf = rstate->getGlobalLinkTransform(kmodel_->getRootLinkName());
     Eigen::Affine3d epose;
     tf::poseMsgToEigen(ps.pose, epose);
-    base_tf = base_tf * epose;    
-    rstate->setJointPositions(kmodel_->getRootJoint(), base_tf);
-    
+    //base_tf = base_tf * epose;
+    rstate->setJointPositions(kmodel_->getRootJoint(), epose);
+
     // Setup Robot
     RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
     rrobot->load(*kmodel_->getURDF());
-    const QColor color = QColor::fromHsv ((float)i / path->poses.size() * 300, 255, 255, ralpha);
+    const QColor color = QColor::fromHsv (rhue, 255, 255, ralpha);
     rrobot->setAlpha(ralpha);
     forEach(std::string ln, kmodel_->getLinkModelNames()){
         rviz::RobotLink *link = rrobot->getRobot().getLink(ln); 
@@ -193,7 +214,7 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
         if (link)
           link->setColor(color.redF(), color.greenF(), color.blueF());
     }
-    
+
     robots_.push_back(RobotCntConstPtr(new RobotCnt(rstate, rrobot)));
     if(lastDrawnPoseStamped != NULL)
       ROS_DEBUG_STREAM("##################################" << i << "/" << path->poses.size());
@@ -247,6 +268,7 @@ void RobotPathDisplay::loadRobotModel()
 void RobotPathDisplay::onEnable()
 {
   Display::onEnable();
+  kpsm_.reset(new planning_scene_monitor::PlanningSceneMonitor(robot_description_property_->getStdString()));
   loadRobotModel();
   calculateOffsetPosition();
   if(!robot_path_topic_property_->getStdString().empty())
