@@ -189,7 +189,8 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
       float alphadiff = robot_alpha_end_property_->getFloat() - robot_alpha_start_property_->getFloat();
       ralpha =  robot_alpha_start_property_->getFloat() + (alphadiff * progress);
       ROS_DEBUG_STREAM("##################################" << i << "/" << path->poses.size());
-      ROS_DEBUG_STREAM("Hue: " << rhue);
+      ROS_INFO_STREAM("Hue: " << rhue);
+      ROS_INFO_STREAM("Anti-Hue: " << (((int)rhue -180) % 360));
       ROS_DEBUG_STREAM("DDistance: " << deltadist);
       ROS_DEBUG_STREAM("Alpha: " << ralpha);
       ROS_DEBUG_STREAM("DTheta(Rads): " << deltatheta << " DTheta(Deg): " << deltatheta * 180 / M_PI);
@@ -206,13 +207,21 @@ void RobotPathDisplay::newRobotPathCallback(nav_msgs::PathConstPtr path)
     // Setup Robot
     RobotStateVisualizationPtr rrobot = RobotStateVisualizationPtr(new RobotStateVisualization(scene_node_, context_, "Robot Path",this));
     rrobot->load(*kmodel_->getURDF());
-    const QColor color = QColor::fromHsv (rhue, 255, 255, ralpha);
+    const QColor color = QColor::fromHsv(rhue, 255, 255, ralpha);
     rrobot->setAlpha(ralpha);
     forEach(std::string ln, kmodel_->getLinkModelNames()){
-        rviz::RobotLink *link = rrobot->getRobot().getLink(ln); 
-        // Check if link exists
-        if (link)
-          link->setColor(color.redF(), color.greenF(), color.blueF());
+        rviz::RobotLink *link = rrobot->getRobot().getLink(ln);
+        if (link) link->setColor(color.redF(), color.greenF(), color.blueF());
+    }
+    const QColor anticolor = QColor::fromHsv( (((( (int)rhue -180) % 360) + 360) % 360), 255, 255, ralpha);
+    std::vector<std::string> collision_links;
+    psm->getCollidingLinks(collision_links, *rstate);
+    forEach(std::string cln, collision_links){
+      rviz::RobotLink *link = rrobot->getRobot().getLink(cln); 
+      if(link){
+        link->unsetColor();
+        link->setColor(anticolor.redF(), anticolor.greenF(), anticolor.blueF());
+      }
     }
 
     robots_.push_back(RobotCntConstPtr(new RobotCnt(rstate, rrobot)));
