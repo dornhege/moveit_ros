@@ -94,6 +94,13 @@ bool isStateCollisionFree(const planning_scene::PlanningScene *planning_scene,
   return planning_scene->isStateFeasible(*state);
 }
 
+void applyJointTrajectory(robot_state::RobotStatePtr & state, const trajectory_msgs::JointTrajectory & trajectory)
+{
+    if(trajectory.points.empty())
+        return;
+    state->setVariablePositions(trajectory.joint_names, trajectory.points.back().positions);
+}
+
 bool samplePossibleGoalStates(const ManipulationPlanPtr &plan, const robot_state::RobotState &reference_state,
   double min_distance, unsigned int attempts)
 {
@@ -227,6 +234,7 @@ bool ApproachAndTranslateStage::evaluate(const ManipulationPlanPtr &plan) const
 
       // try to compute a straight line path that arrives at the goal using the specified approach direction
       robot_state::RobotStatePtr first_approach_state(new robot_state::RobotState(*plan->possible_goal_states_[i]));
+      applyJointTrajectory(first_approach_state, plan->approach_posture_);
 
       std::vector<robot_state::RobotStatePtr> approach_states;
       double d_approach = first_approach_state->computeCartesianPath(plan->shared_data_->planning_group_, approach_states, plan->shared_data_->ik_link_,
@@ -253,6 +261,7 @@ bool ApproachAndTranslateStage::evaluate(const ManipulationPlanPtr &plan) const
 
           // try to compute a straight line path that moves from the goal in a desired direction
           robot_state::RobotStatePtr last_retreat_state(new robot_state::RobotState(planning_scene_after_approach->getCurrentState()));
+          applyJointTrajectory(last_retreat_state, plan->retreat_posture_);
           std::vector<robot_state::RobotStatePtr> retreat_states;
           double d_retreat = last_retreat_state->computeCartesianPath(plan->shared_data_->planning_group_, retreat_states, plan->shared_data_->ik_link_,
                                                                        retreat_direction, retreat_direction_is_global_frame, plan->retreat_.desired_distance,
