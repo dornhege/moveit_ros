@@ -37,6 +37,7 @@
 #include <moveit/pick_place/pick_place.h>
 #include <moveit/pick_place/approach_and_translate_stage.h>
 #include <moveit/trajectory_processing/trajectory_tools.h>
+#include <moveit/robot_state/conversions.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <ros/console.h>
 
@@ -74,6 +75,7 @@ bool isStateCollisionFree(const planning_scene::PlanningScene *planning_scene,
 
   if (grasp_posture->joint_names.size() > 0)
   {
+      ROS_INFO_STREAM(__PRETTY_FUNCTION__ << ": grasp_posture is: " << *grasp_posture);
     // apply the grasp posture for the end effector (we always apply it here since it could be the case the sampler changes this posture)
     for (std::size_t i = 0 ; i < grasp_posture->points.size() ; ++i)
     {
@@ -86,6 +88,7 @@ bool isStateCollisionFree(const planning_scene::PlanningScene *planning_scene,
   }
   else
   {
+      ROS_INFO("%s: grasp_posture empty.", __PRETTY_FUNCTION__);
     collision_detection::CollisionResult res;
     planning_scene->checkCollision(req, res, *state, *collision_matrix);
     if (res.collision)
@@ -143,6 +146,8 @@ bool executeAttachObject(const ManipulationPlanSharedDataConstPtr &shared_plan_d
     // remember the configuration of the gripper before the grasp;
     // this configuration will be set again when releasing the object
     msg.detach_posture = detach_posture;
+
+    ROS_INFO_STREAM(__PRETTY_FUNCTION__ << ": detach_posture is: " << detach_posture);
     ok = ps->processAttachedCollisionObjectMsg(msg);
   }
   motion_plan->planning_scene_monitor_->triggerSceneUpdateEvent((planning_scene_monitor::PlanningSceneMonitor::SceneUpdateType)
@@ -154,6 +159,7 @@ bool executeAttachObject(const ManipulationPlanSharedDataConstPtr &shared_plan_d
 void addGripperTrajectory(const ManipulationPlanPtr &plan, const collision_detection::AllowedCollisionMatrixConstPtr &collision_matrix, const std::string &name)
 {
   // Check if a "closed" end effector configuration was specified
+  ROS_INFO_STREAM(__PRETTY_FUNCTION__ << ": plan->retreat_posture_ is: " << plan->retreat_posture_);
   if (!plan->retreat_posture_.joint_names.empty())
   {
     robot_state::RobotStatePtr ee_closed_state(new robot_state::RobotState(plan->trajectories_.back().trajectory_->getLastWayPoint()));
@@ -208,6 +214,7 @@ bool ApproachAndTranslateStage::evaluate(const ManipulationPlanPtr &plan) const
     retreat_direction = planning_scene_->getFrameTransform(plan->retreat_.direction.header.frame_id).rotation() * retreat_direction;
 
   // state validity checking during the approach must ensure that the gripper posture is that for pre-grasping
+  ROS_INFO_STREAM(__PRETTY_FUNCTION__ << ": plan->approach_posture_ is: " << plan->approach_posture_);
   robot_state::GroupStateValidityCallbackFn approach_validCallback = boost::bind(&isStateCollisionFree, planning_scene_.get(),
                                                                                  collision_matrix_.get(), verbose_, &plan->approach_posture_, _1, _2, _3);
   plan->goal_sampler_->setVerbose(verbose_);
@@ -256,12 +263,16 @@ bool ApproachAndTranslateStage::evaluate(const ManipulationPlanPtr &plan) const
           planning_scene_after_approach->processAttachedCollisionObjectMsg(plan->shared_data_->diff_attached_object_);
 
           // state validity checking during the retreat after the grasp must ensure the gripper posture is that of the actual grasp
+          ROS_INFO_STREAM(__PRETTY_FUNCTION__ << ": plan->retreat_posture_ is: " << plan->retreat_posture_);
           robot_state::GroupStateValidityCallbackFn retreat_validCallback = boost::bind(&isStateCollisionFree, planning_scene_after_approach.get(),
                                                                                         collision_matrix_.get(), verbose_, &plan->retreat_posture_, _1, _2, _3);
 
           // try to compute a straight line path that moves from the goal in a desired direction
           robot_state::RobotStatePtr last_retreat_state(new robot_state::RobotState(planning_scene_after_approach->getCurrentState()));
           applyJointTrajectory(last_retreat_state, plan->retreat_posture_);
+          moveit_msgs::RobotState last_retreat_state_msg;
+          moveit::core::robotStateToRobotStateMsg(*last_retreat_state, last_retreat_state_msg);
+          ROS_INFO_STREAM("last_retreat_state_msg: " << last_retreat_state_msg);
           std::vector<robot_state::RobotStatePtr> retreat_states;
           double d_retreat = last_retreat_state->computeCartesianPath(plan->shared_data_->planning_group_, retreat_states, plan->shared_data_->ik_link_,
                                                                        retreat_direction, retreat_direction_is_global_frame, plan->retreat_.desired_distance,
