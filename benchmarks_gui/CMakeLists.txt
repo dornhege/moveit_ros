@@ -73,6 +73,7 @@ target_link_libraries(moveit_benchmark_gui
   ${OGRE_LIBRARIES}
   ${QT_LIBRARIES}
   ${Boost_LIBRARIES}
+  ${rviz_DEFAULT_PLUGIN_LIBRARIES}
 )
 
 install(
