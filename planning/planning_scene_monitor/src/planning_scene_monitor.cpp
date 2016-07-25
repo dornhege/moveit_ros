@@ -321,6 +321,11 @@ void planning_scene_monitor::PlanningSceneMonitor::scenePublishingThread()
     occupancy_map_monitor::OccMapTree::ReadLock lock;
     if (octomap_monitor_) lock = octomap_monitor_->getOcTreePtr()->reading();
     scene_->getPlanningSceneMsg(msg);
+    if (octomap_monitor_)
+    {
+      octomap_monitor_->getOcTreePtr()->resetChangeDetection();
+      octomap_monitor_->getOcTreePtr()->enableChangeDetection(octomap_monitor_->isOctomapDiffEnabled());
+    }
   }
   planning_scene_publisher_.publish(msg);
   ROS_DEBUG("Published the full planning scene: '%s'", msg.name.c_str());
@@ -346,6 +351,11 @@ void planning_scene_monitor::PlanningSceneMonitor::scenePublishingThread()
             occupancy_map_monitor::OccMapTree::ReadLock lock;
             if (octomap_monitor_) lock = octomap_monitor_->getOcTreePtr()->reading();
             scene_->getPlanningSceneDiffMsg(msg);
+            if (octomap_monitor_)
+            {
+              octomap_monitor_->getOcTreePtr()->resetChangeDetection();
+              octomap_monitor_->getOcTreePtr()->enableChangeDetection(octomap_monitor_->isOctomapDiffEnabled());
+            }
           }
           boost::recursive_mutex::scoped_lock prevent_shape_cache_updates(shape_handles_lock_); // we don't want the transform cache to update while we are potentially changing attached bodies
           scene_->setAttachedBodyUpdateCallback(robot_state::AttachedBodyCallback());
@@ -364,6 +374,11 @@ void planning_scene_monitor::PlanningSceneMonitor::scenePublishingThread()
             occupancy_map_monitor::OccMapTree::ReadLock lock;
             if (octomap_monitor_) lock = octomap_monitor_->getOcTreePtr()->reading();
             scene_->getPlanningSceneMsg(msg);
+            if (octomap_monitor_)
+            {
+              octomap_monitor_->getOcTreePtr()->resetChangeDetection();
+              octomap_monitor_->getOcTreePtr()->enableChangeDetection(octomap_monitor_->isOctomapDiffEnabled());
+            }
           }
           // also publish timestamp of this robot_state
           msg.robot_state.joint_state.header.stamp = last_robot_motion_time_;
